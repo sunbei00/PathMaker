@@ -88,9 +88,9 @@ int main(int, char**)
 
                     for(size_t j =0; j < posePerLine; j++){
                         glm::vec3 samplingPose;
-                        samplingPose.x = srcPose.x * (1.0/posePerLine*(float)j) + targetPose.x * (1 - 1.0/posePerLine*(float)j);
-                        samplingPose.y = srcPose.y * (1.0/posePerLine*(float)j) + targetPose.y * (1 - 1.0/posePerLine*(float)j);
-                        samplingPose.z = srcPose.z * (1.0/posePerLine*(float)j) + targetPose.z * (1 - 1.0/posePerLine*(float)j);
+                        samplingPose.x = srcPose.x * (1 - 1.0/posePerLine*(float)j) + targetPose.x * (1.0/posePerLine*(float)j);
+                        samplingPose.y = srcPose.y * (1 - 1.0/posePerLine*(float)j) + targetPose.y * (1.0/posePerLine*(float)j);
+                        samplingPose.z = srcPose.z * (1 - 1.0/posePerLine*(float)j) + targetPose.z * (1.0/posePerLine*(float)j);
 
                         glm::vec3 noise = center - samplingPose;
                         noise.x *= 0.7 * ((float)rand()/RAND_MAX);
@@ -98,7 +98,7 @@ int main(int, char**)
 
                         glm::vec3 direction = glm::normalize(centerWithNoise - samplingPose);
                         float yaw = atan2(direction.y, direction.x);
-                        yaw = glm::degrees(yaw);
+                        //yaw = glm::degrees(yaw);
 
                         posWithYaw.emplace_back(samplingPose, yaw);
                         poses.push_back({samplingPose, samplingPose + direction});

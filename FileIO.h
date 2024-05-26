@@ -10,6 +10,8 @@
 #include <iostream>
 #include <glm/vec3.hpp>
 
+
+
 void saveToTextFile(const std::vector<std::pair<glm::vec3, float>>& posWithYaw, const std::string& filename) {
     std::ofstream outFile(filename);
     if (!outFile) {
