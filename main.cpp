@@ -12,7 +12,7 @@ static std::vector<glm::vec3> sel;
 static std::vector<glm::vec3> lineVertices;
 static std::vector<std::pair<glm::vec3,glm::vec3>> poses;
 static std::vector<std::pair<glm::vec3,float>> posWithYaw;
-static std::string saveFolderPath = "./";
+static std::string saveFolderPath = ".";
 
 
 
@@ -105,7 +105,7 @@ int main(int, char**)
                     }
                 }
 
-                saveToTextFile(posWithYaw, saveFolderPath + "path.txt");
+                saveToTextFile(posWithYaw, saveFolderPath + "/path.txt");
 
                 if(test.size != -1)
                     removeMap(test);
