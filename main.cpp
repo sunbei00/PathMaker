@@ -16,6 +16,11 @@ static std::string saveFolderPath = ".";
 
 
 
+//#define MODE_1        // sampling method
+//#define MODE_2        // circle path
+//#define MODE_3        // move path
+//#define MODE_4        // return path
+//#define MODE_5        // CW path
 
 int main(int, char**)
 {
@@ -66,13 +71,19 @@ int main(int, char**)
             //ImGui::SetNextWindowPos(ImVec2(0,0));
 
             ImGui::Begin("Path Maker");
-            ImGui::SliderInt("Capture amount", &capture, 200, 500);
+#ifdef MODE_1
+            ImGui::SliderInt("Capture amount", &capture, 10, 500);
+#endif
 
             ImGuiFileDialog* fileDialog = ImGuiFileDialog::Instance();
+
+
             if(ImGui::Button("make Path") && sel.size() >= 2){
 
                 poses.clear();
                 posWithYaw.clear();
+
+#ifdef MODE_1
                 int posePerLine = capture / sel.size();
 
                 glm::vec3 center = glm::vec3(0,0,0);
@@ -81,6 +92,7 @@ int main(int, char**)
                     center.y += (it.y / sel.size());
                     center.z += (it.z / sel.size());
                 }
+
 
                 for(size_t i = 0; i < sel.size(); i++){
                     glm::vec3& srcPose = sel[i];
@@ -104,6 +116,31 @@ int main(int, char**)
                         poses.push_back({samplingPose, samplingPose + direction});
                     }
                 }
+#endif
+
+
+#if defined(MODE_2) || defined(MODE_3)
+                for(size_t i = 0; i < sel.size(); i++)
+                    posWithYaw.emplace_back(sel[i], 0);
+#endif
+
+#ifdef MODE_2
+                if(sel.size() !=0)
+                    posWithYaw.emplace_back(sel[0], 0);
+#endif
+
+
+#ifdef  MODE_4
+                for(auto & srcPose : sel)
+                    posWithYaw.emplace_back(srcPose, 0);
+                for(std::reverse_iterator<std::vector<glm::vec<3, float>>::iterator> it = sel.rbegin() ; it != sel.rend(); it++)
+                    posWithYaw.emplace_back(*it, 0);
+#endif
+
+
+#ifdef MODE_5
+
+#endif
 
                 saveToTextFile(posWithYaw, saveFolderPath + "/path.txt");
 
@@ -163,7 +200,13 @@ int main(int, char**)
                 sels.size = sel.size();
 
                 lineVertices.clear();
+
+#if defined(MODE_1) || defined(MODE_2) || defined(MODE_5)
                 for(int i=0; i < sel.size(); i++){
+#else
+                for(int i=0; i < sel.size()-1; i++){
+#endif
+
                     lineVertices.push_back(sel[i]);
                     lineVertices.push_back(sel[(i+1) % sel.size()]);
                 }
