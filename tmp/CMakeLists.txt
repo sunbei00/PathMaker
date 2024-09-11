@@ -1,14 +1,7 @@
-cmake_minimum_required(VERSION 3.8)
-project(path_maker)
-cmake_policy(SET CMP0072 NEW)
+cmake_minimum_required(VERSION 3.28)
+project(PathMaker)
 
-
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
-
-find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
+set(CMAKE_CXX_STANDARD 17)
 
 # --------- third party lib -------
 find_package(OpenGL REQUIRED)
@@ -34,13 +27,6 @@ file(GLOB GLAD_SOURCES
 )
 # ---------------------------------
 
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  set(ament_cmake_copyright_FOUND TRUE)
-  set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
-endif()
-
 
 set(THIRD_PARTY_INCLUDE_DIRECTORY
         ${CMAKE_SOURCE_DIR}/ThirdParty/
@@ -59,12 +45,3 @@ set(THIRD_PARTY_SRC_DIRECTORY
 add_executable(PathMaker main.cpp ${THIRD_PARTY_SRC_DIRECTORY})
 target_include_directories(PathMaker PRIVATE ${THIRD_PARTY_INCLUDE_DIRECTORY})
 target_link_libraries(PathMaker OpenGL::GL glfw ${PCL_LIBRARIES})
-ament_target_dependencies(PathMaker rclcpp)
-
-install(TARGETS
-  PathMaker
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-
-ament_package()

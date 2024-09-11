@@ -1,3 +1,8 @@
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare" 
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 #include "ImguiHelper.hpp"
 #include "pcl-1.12/pcl/io/pcd_io.h"
 #include "pcl-1.12/pcl/point_types.h"
@@ -16,11 +21,7 @@ static std::string saveFolderPath = ".";
 
 
 
-//#define MODE_1        // sampling method
-//#define MODE_2        // circle path
-//#define MODE_3        // move path
-//#define MODE_4        // return path
-//#define MODE_5        // CW path
+#define MODE_1        // sampling method
 
 int main(int, char**)
 {
@@ -119,28 +120,6 @@ int main(int, char**)
 #endif
 
 
-#if defined(MODE_2) || defined(MODE_3)
-                for(size_t i = 0; i < sel.size(); i++)
-                    posWithYaw.emplace_back(sel[i], 0);
-#endif
-
-#ifdef MODE_2
-                if(sel.size() !=0)
-                    posWithYaw.emplace_back(sel[0], 0);
-#endif
-
-
-#ifdef  MODE_4
-                for(auto & srcPose : sel)
-                    posWithYaw.emplace_back(srcPose, 0);
-                for(std::reverse_iterator<std::vector<glm::vec<3, float>>::iterator> it = sel.rbegin() ; it != sel.rend(); it++)
-                    posWithYaw.emplace_back(*it, 0);
-#endif
-
-
-#ifdef MODE_5
-
-#endif
 
                 saveToTextFile(posWithYaw, saveFolderPath + "/path.txt");
 
@@ -201,7 +180,7 @@ int main(int, char**)
 
                 lineVertices.clear();
 
-#if defined(MODE_1) || defined(MODE_2) || defined(MODE_5)
+#if defined(MODE_1)
                 for(int i=0; i < sel.size(); i++){
 #else
                 for(int i=0; i < sel.size()-1; i++){
@@ -337,3 +316,5 @@ int main(int, char**)
 
     return 0;
 }
+
+#pragma GCC diagnostic pop
