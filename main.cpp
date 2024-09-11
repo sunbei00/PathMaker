@@ -50,6 +50,7 @@ std::vector<glm::vec3> interpolateBetweenPoints(const glm::vec3& start, const gl
         float t = static_cast<float>(i) / numIntervals;  
         glm::vec3 interpolatedPos = linearInterpolate(start, end, t);
         interpolatedPositions.push_back(interpolatedPos); 
+        interpolatedPositions.push_back(end)
     }
 
     return interpolatedPositions;
@@ -141,15 +142,8 @@ int main(int argc, char** argv)
 
             static int capture = 4.0;
 
-
-            //ImGui::SetNextWindowSize(ImVec2(200, 100));
-            //ImGui::SetNextWindowPos(ImVec2(0,0));
-
             ImGui::Begin("Path Maker");
-            ImGui::SliderInt("split cm", &capture, 0.0, 100.0);
-
-            // ImGuiFileDialog* fileDialog = ImGuiFileDialog::Instance();
-
+            ImGui::SliderInt("split cm", &capture, 0.0, 10000.0);
 
             if(ImGui::Button("Send Path") && sel.size() >= 1){
                 poses.clear();
@@ -175,19 +169,6 @@ int main(int argc, char** argv)
             }
 
             ImGui::Text(status.c_str());
-            // if (ImGui::Button("Select Save Location")) {
-            //     fileDialog->OpenDialog("SelectFolderDlgKey", "Select Folder to Save", nullptr);
-            // }
-
-            // if (ImGuiFileDialog::Instance()->Display("SelectFolderDlgKey"))
-            // {
-            //     if (fileDialog->IsOk()) {
-            //         saveFolderPath = ImGuiFileDialog::Instance()->GetCurrentPath();
-            //     }
-            //     ImGuiFileDialog::Instance()->Close();
-            // }
-
-            // ImGui::Text("Save Folder Path: %s", saveFolderPath.c_str());
 
             if (ImGui::Button("reset send")){
                 if(bstatus){
