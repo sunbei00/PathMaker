@@ -2,6 +2,7 @@
 #pragma GCC diagnostic ignored "-Wsign-compare" 
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 #pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wformat-security"
 
 #include "ImguiHelper.hpp"
 #include "pcl-1.12/pcl/io/pcd_io.h"
@@ -11,20 +12,82 @@
 #include <vector>
 #include <cstdlib>
 #include <ctime>
+#include "rclcpp/rclcpp.hpp"
+#include "nav_msgs/msg/path.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 
+
+rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
+rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subscription_;
 
 static std::vector<glm::vec3> sel;
 static std::vector<glm::vec3> lineVertices;
-static std::vector<std::pair<glm::vec3,glm::vec3>> poses;
-static std::vector<std::pair<glm::vec3,float>> posWithYaw;
+static std::vector<glm::vec3> poses;
 static std::string saveFolderPath = ".";
 
 
+glm::vec3 pos = {0.0,0.0,1.0};
+void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+    auto odom_position = msg->pose.pose.position;
+    pos = {odom_position.x, odom_position.y, odom_position.z};
+}
 
-#define MODE_1        // sampling method
+glm::vec3 linearInterpolate(const glm::vec3& start, const glm::vec3& end, float t) {
+    return start + t * (end - start);
+}
 
-int main(int, char**)
+std::vector<glm::vec3> interpolateBetweenPoints(const glm::vec3& start, const glm::vec3& end, float intervalCm) {
+    std::vector<glm::vec3> interpolatedPositions;
+
+    float distance = glm::distance(start, end);  
+
+    float distanceCm = distance * 100.0f; 
+
+    int numIntervals = static_cast<int>(distanceCm / intervalCm);
+
+    for (int i = 0; i <= numIntervals; ++i) {
+        float t = static_cast<float>(i) / numIntervals;  
+        glm::vec3 interpolatedPos = linearInterpolate(start, end, t);
+        interpolatedPositions.push_back(interpolatedPos); 
+    }
+
+    return interpolatedPositions;
+}
+
+
+void publish_path(const std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::Path>> &path_publisher, const std::vector<glm::vec3> &positions, rclcpp::Time time_now)
 {
+    nav_msgs::msg::Path path_msg;
+    path_msg.header.stamp = time_now;
+    path_msg.header.frame_id = "map";
+    for (const auto &pos : positions)
+    {
+        geometry_msgs::msg::PoseStamped pose;
+        pose.header.stamp = time_now;
+        pose.header.frame_id = "map";
+        pose.pose.position.x = pos.x;
+        pose.pose.position.y = pos.y;
+        pose.pose.position.z = pos.z;
+        pose.pose.orientation.w = 1.0;
+        path_msg.poses.push_back(pose);
+    }       
+    path_publisher->publish(path_msg);
+}
+std::string status = "not yet";
+bool bstatus = false;
+
+int main(int argc, char** argv)
+{
+
+    rclcpp::init(argc, argv);
+    auto node = rclcpp::Node::make_shared("path_maker");
+    
+    auto subscription = node->create_subscription<nav_msgs::msg::Odometry>(
+        "odom", rclcpp::QoS(10), std::bind(&odom_callback, std::placeholders::_1));
+    path_publisher_ = node->create_publisher<nav_msgs::msg::Path>("path", 10);
+
+
     srand(time(nullptr));
     GLFWwindow* window = imguiInit();
     if(window == nullptr)
@@ -41,6 +104,17 @@ int main(int, char**)
 
     while (!glfwWindowShouldClose(window))
     {
+        rclcpp::spin_some(node); 
+        if(test.size != -1) 
+            removeMap(test);
+        fillMap(test);
+        glBindVertexArray(test.vao);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3), &pos.x, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (GLvoid*)0);
+        glEnableVertexAttribArray(0);
+        glBindVertexArray(0);
+        test.size = 1;
+
         glfwPollEvents();
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -65,94 +139,74 @@ int main(int, char**)
             }
         } else {
 
-            static int capture = 300;
+            static int capture = 4.0;
 
 
             //ImGui::SetNextWindowSize(ImVec2(200, 100));
             //ImGui::SetNextWindowPos(ImVec2(0,0));
 
             ImGui::Begin("Path Maker");
-#ifdef MODE_1
-            ImGui::SliderInt("Capture amount", &capture, 10, 500);
-#endif
+            ImGui::SliderInt("split cm", &capture, 0.0, 100.0);
 
-            ImGuiFileDialog* fileDialog = ImGuiFileDialog::Instance();
+            // ImGuiFileDialog* fileDialog = ImGuiFileDialog::Instance();
 
 
-            if(ImGui::Button("make Path") && sel.size() >= 2){
-
+            if(ImGui::Button("Send Path") && sel.size() >= 1){
                 poses.clear();
-                posWithYaw.clear();
 
-#ifdef MODE_1
-                int posePerLine = capture / sel.size();
+                auto interpolated = interpolateBetweenPoints(pos, sel[0], capture);
+                for(auto inter_pos : interpolated)
+                    poses.push_back(inter_pos);
+                    
+                for(size_t i = 1; i < sel.size(); i++){
+                    glm::vec3& srcPose = sel[i-1];
+                    glm::vec3& targetPose = sel[i];
 
-                glm::vec3 center = glm::vec3(0,0,0);
-                for(auto& it : sel){
-                    center.x += (it.x / sel.size());
-                    center.y += (it.y / sel.size());
-                    center.z += (it.z / sel.size());
+                    auto interpolated = interpolateBetweenPoints(srcPose, targetPose, capture);
+                    for(auto inter_pos : interpolated)
+                        poses.push_back(inter_pos);
                 }
 
+                rclcpp::Time now = node->now();
+                publish_path(path_publisher_, poses, now);
+                rclcpp::spin_some(node);
+                status = "sent";
+                bstatus = true;
+            }
 
-                for(size_t i = 0; i < sel.size(); i++){
-                    glm::vec3& srcPose = sel[i];
-                    glm::vec3& targetPose = sel[(i+1)%sel.size()];
+            ImGui::Text(status.c_str());
+            // if (ImGui::Button("Select Save Location")) {
+            //     fileDialog->OpenDialog("SelectFolderDlgKey", "Select Folder to Save", nullptr);
+            // }
 
-                    for(size_t j =0; j < posePerLine; j++){
-                        glm::vec3 samplingPose;
-                        samplingPose.x = srcPose.x * (1 - 1.0/posePerLine*(float)j) + targetPose.x * (1.0/posePerLine*(float)j);
-                        samplingPose.y = srcPose.y * (1 - 1.0/posePerLine*(float)j) + targetPose.y * (1.0/posePerLine*(float)j);
-                        samplingPose.z = srcPose.z * (1 - 1.0/posePerLine*(float)j) + targetPose.z * (1.0/posePerLine*(float)j);
+            // if (ImGuiFileDialog::Instance()->Display("SelectFolderDlgKey"))
+            // {
+            //     if (fileDialog->IsOk()) {
+            //         saveFolderPath = ImGuiFileDialog::Instance()->GetCurrentPath();
+            //     }
+            //     ImGuiFileDialog::Instance()->Close();
+            // }
 
-                        glm::vec3 noise = center - samplingPose;
-                        noise.x *= 0.7 * ((float)rand()/RAND_MAX);
-                        glm::vec3 centerWithNoise = noise + center;
+            // ImGui::Text("Save Folder Path: %s", saveFolderPath.c_str());
 
-                        glm::vec3 direction = glm::normalize(centerWithNoise - samplingPose);
-                        float yaw = atan2(direction.y, direction.x);
-                        //yaw = glm::degrees(yaw);
+            if (ImGui::Button("reset send")){
+                if(bstatus){
+                    bstatus = false;
+                    status = "not yet";
+                    sel.clear();
+                    removeMap(sels);
+                    removeMap(lines);
 
-                        posWithYaw.emplace_back(samplingPose, yaw);
-                        poses.push_back({samplingPose, samplingPose + direction});
-                    }
+                    fillMap(sels);
+                    fillMap(lines);
                 }
-#endif
-
-
-
-                saveToTextFile(posWithYaw, saveFolderPath + "/path.txt");
-
-                if(test.size != -1)
-                    removeMap(test);
-
-                fillMap(test);
-                glBindVertexArray(test.vao);
-                glBufferData(GL_ARRAY_BUFFER, poses.size()* sizeof(glm::vec3)*2, &poses[0].first, GL_STATIC_DRAW);
-                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (GLvoid*)0);
-                glEnableVertexAttribArray(0);
-                glBindVertexArray(0);
-                test.size = poses.size()*2;
-
-
             }
-
-            if (ImGui::Button("Select Save Location")) {
-                fileDialog->OpenDialog("SelectFolderDlgKey", "Select Folder to Save", nullptr);
-            }
-
-            if (ImGuiFileDialog::Instance()->Display("SelectFolderDlgKey"))
-            {
-                if (fileDialog->IsOk()) {
-                    saveFolderPath = ImGuiFileDialog::Instance()->GetCurrentPath();
-                }
-                ImGuiFileDialog::Instance()->Close();
-            }
-
-            ImGui::Text("Save Folder Path: %s", saveFolderPath.c_str());
 
             ImGui::End();
 
+
+            if(bstatus)
+                goto selection;
 
             if(ImGui::IsMouseClicked(ImGuiMouseButton_Right)){
                 int display_w, display_h;
@@ -180,12 +234,12 @@ int main(int, char**)
 
                 lineVertices.clear();
 
-#if defined(MODE_1)
-                for(int i=0; i < sel.size(); i++){
-#else
-                for(int i=0; i < sel.size()-1; i++){
-#endif
+                if (sel.size() != 0){
+                    lineVertices.push_back(pos);
+                    lineVertices.push_back(sel[0]);
+                }
 
+                for(int i=0; i < sel.size()-1; i++){
                     lineVertices.push_back(sel[i]);
                     lineVertices.push_back(sel[(i+1) % sel.size()]);
                 }
@@ -200,30 +254,36 @@ int main(int, char**)
 
 
             }else if(ImGui::IsMouseClicked(ImGuiMouseButton_Middle)){
-                if(sels.size != -1){
+                if(sel.size() != 0){
                     removeMap(sels);
                     removeMap(lines);
                 }
+
                 if(sel.size() > 0){
                     sel.pop_back();
 
+
                     fillMap(sels);
                     glBindVertexArray(sels.vao);
-                    glBufferData(GL_ARRAY_BUFFER, sel.size()* sizeof(glm::vec3), &sel[0], GL_STATIC_DRAW);
+                    glBufferData(GL_ARRAY_BUFFER, sel.size()* sizeof(glm::vec3), sel.data(), GL_STATIC_DRAW);
                     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (GLvoid*)0);
                     glEnableVertexAttribArray(0);
                     glBindVertexArray(0);
                     sels.size = sel.size();
 
                     lineVertices.clear();
-                    for(int i=0; i < sel.size(); i++){
-                        lineVertices.push_back(sel[i]);
-                        lineVertices.push_back(sel[(i+1) % sel.size()]);
+                    if (sel.size() != 0){
+                        lineVertices.push_back(pos);
+                        lineVertices.push_back(sel[0]);
                     }
-
+                    if(sel.size() >= 2)
+                        for(int i=0; i < sel.size()-1; i++){
+                            lineVertices.push_back(sel[i]);
+                            lineVertices.push_back(sel[(i+1) % sel.size()]);
+                        }
                     fillMap(lines);
                     glBindVertexArray(lines.vao);
-                    glBufferData(GL_ARRAY_BUFFER, lineVertices.size()* sizeof(glm::vec3), &lineVertices[0], GL_STATIC_DRAW);
+                    glBufferData(GL_ARRAY_BUFFER, lineVertices.size()* sizeof(glm::vec3), lineVertices.data(), GL_STATIC_DRAW);
                     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (GLvoid*)0);
                     glEnableVertexAttribArray(0);
                     glBindVertexArray(0);
@@ -231,6 +291,10 @@ int main(int, char**)
                 }
             }
         }
+
+selection:
+
+
 
         // Handle mouse dragging
         static bool dragging = false;
@@ -285,7 +349,7 @@ int main(int, char**)
         glDrawArrays(GL_POINTS, 0, map.size);
         glBindVertexArray(0);
 
-        pointSize = 10.0;
+        pointSize = 8.0;
         glUniform1f(pointLoc, pointSize);
         glBindVertexArray(sels.vao);
         glDrawArrays(GL_POINTS, 0, sels.size);
@@ -297,10 +361,10 @@ int main(int, char**)
         glDrawArrays(GL_LINES, 0, lines.size);
         glBindVertexArray(0);
 
-        pointSize = 1.0;
+        pointSize = 15.0;
         glUniform1f(pointLoc, pointSize);
         glBindVertexArray(test.vao);
-        glDrawArrays(GL_LINES, 0, test.size);
+        glDrawArrays(GL_POINTS, 0, test.size);
         glBindVertexArray(0);
 
 
@@ -313,6 +377,7 @@ int main(int, char**)
 
     removeMap(map);
     imguiTerminate(window);
+    rclcpp::shutdown();
 
     return 0;
 }

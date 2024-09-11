@@ -7,8 +7,12 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# ---------- ros2 ---------------
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+# --------------------------------
 
 # --------- third party lib -------
 find_package(OpenGL REQUIRED)
@@ -27,7 +31,7 @@ file(GLOB IMGUI_SOURCES
 )
 # ---------------------------------
 
-# --------- OpenGL ------------------
+# --------- OpenGL ------------------   
 set(GLAD_DIR ${CMAKE_SOURCE_DIR}/ThirdParty/glad/)
 file(GLOB GLAD_SOURCES
         ${GLAD_DIR}/glad.c
@@ -56,10 +60,11 @@ set(THIRD_PARTY_SRC_DIRECTORY
         FileIO.h
 )
 
+
 add_executable(PathMaker main.cpp ${THIRD_PARTY_SRC_DIRECTORY})
 target_include_directories(PathMaker PRIVATE ${THIRD_PARTY_INCLUDE_DIRECTORY})
 target_link_libraries(PathMaker OpenGL::GL glfw ${PCL_LIBRARIES})
-ament_target_dependencies(PathMaker rclcpp)
+ament_target_dependencies(PathMaker rclcpp nav_msgs geometry_msgs)
 
 install(TARGETS
   PathMaker
